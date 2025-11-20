@@ -1,0 +1,43 @@
+# Mark common binary artifacts as binary and avoid end-of-line conversions
+*.7z binary
+*.zip binary
+*.exe binary
+*.msi binary
+*.dll binary
+*.pdb binary
+*.so binary
+*.dylib binary
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.mov binary
+*.mp4 binary
+
+# Treat downloaded/third-party runtime blobs as binary and exclude from archive exports
+src-tauri/resources/obs/** binary
+src-tauri/resources/obs/** export-ignore
+src-tauri/resources/obs/** linguist-vendored
+
+# Cache and tool caches should not be exported in release archives
+.obs-cache/** export-ignore
+
+# Node and build artifacts
+node_modules/** export-ignore
+build/** export-ignore
+/dist/** export-ignore
+
+# Don't try to diff large binaries
+*.zip -diff
+*.7z -diff
+*.exe -diff
+*.msi -diff
+*.dll -diff
+
+# Ensure text handling for scripts
+*.ps1 text eol=crlf
+*.sh text eol=lf
+
+# Default behavior for other files is unchanged

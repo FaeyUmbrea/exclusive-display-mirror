@@ -1,0 +1,42 @@
+# GitHub Actions Labeler mapping - path-based auto-label rules
+# Labels will be applied when a PR changes files matching the listed globs.
+
+ui:
+  - "src/**"
+  - "index.css"
+  - "src/**/*.svelte"
+
+tauri:
+  - "src-tauri/**"
+
+native:
+  - "display_helper/**"
+  - "win-capture/**"
+
+obs:
+  - "src-tauri/resources/obs/**"
+  - "tools/download_obs.ps1"
+
+build:
+  - "package.json"
+  - "yarn.lock"
+  - "vite.config.*"
+  - "postcss.config.js"
+  - "src-tauri/Cargo.toml"
+  - "Cargo.toml"
+  - "Cargo.lock"
+
+ci:
+  - ".github/workflows/**"
+
+docs:
+  - "README.md"
+  - "CONTRIBUTING.md"
+  - "CODE_OF_CONDUCT.md"
+
+deps:
+  - "**/package.json"
+  - "**/Cargo.toml"
+
+release:
+  - ".github/release-drafter.yml"

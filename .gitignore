@@ -23,3 +23,33 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.svelte-kit/
+build/
+
+# OBS cache and downloaded builds
+.obs-cache/
+obs_build_dl/
+
+# OBS runtime resources (downloaded, not checked in)
+src-tauri/resources/obs/
+
+# Rust/Cargo build artifacts
+/target/
+/src-tauri/target/
+**/target/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Yarn
+.pnp.*
+.yarn/
+!.yarn/releases
+!.yarn/plugins
+!.yarnrc.yml
+
+# Bootstrapper
+src-tauri/binaries

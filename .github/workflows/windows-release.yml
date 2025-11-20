@@ -1,0 +1,170 @@
+name: Windows Release (Tauri)
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  build-release-windows:
+    name: Build and attach release artifacts (windows-latest)
+    runs-on: windows-latest
+
+    permissions:
+      contents: write # needed to upload release assets
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+
+      - name: Cache Cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Setup Rust (MSVC)
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable-x86_64-pc-windows-msvc
+          components: clippy,rustfmt
+          override: true
+
+      - name: Install WiX Toolset (for MSI bundling)
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y --no-progress
+
+      - name: Get libobs-builds asset metadata
+        id: obs-asset
+        shell: pwsh
+        run: |
+          $api = 'https://api.github.com/repos/libobs-rs/libobs-builds/releases/latest'
+          Write-Output "Fetching libobs builds release metadata from $api"
+          try {
+            $release = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'obs-asset-fetch' }
+          } catch { Write-Error "Failed to fetch libobs releases: $_"; exit 1 }
+          $asset = $release.assets | Where-Object { $_.name -match 'obs-build.*\.7z$' } | Select-Object -First 1
+          if (-not $asset) { Write-Error "No obs-build asset found"; exit 1 }
+
+          $assetId = $asset.id.ToString()
+          $assetSize = $asset.size.ToString()
+          $assetUpdated = $asset.updated_at
+          # sanitize updated_at for use in key (remove colon and space characters)
+          $sanitizedUpdated = ($assetUpdated -replace '[:\s]','-')
+          $assetName = $asset.name
+
+          Write-Output "Found asset: $assetName id: $assetId size: $assetSize updated: $assetUpdated"
+
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_id=$assetId"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_size=$assetSize"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_updated_at=$sanitizedUpdated"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_download_url=$($asset.browser_download_url)"
+
+          # export for scripts
+          Add-Content -Path $env:GITHUB_ENV -Value "OBS_ASSET_ID=$assetId"
+          Add-Content -Path $env:GITHUB_ENV -Value "OBS_ASSET_NAME=$assetName"
+          Add-Content -Path $env:GITHUB_ENV -Value "OBS_ASSET_URL=$($asset.browser_download_url)"
+
+          # attempt to locate a checksum asset and export its URL if present
+          $checksumAsset = $release.assets | Where-Object { $_.name -match '\.sha256$|\.sha256\.txt$|\.sha256sum$|\.sha256sum\.txt$|\.sha$' } | Select-Object -First 1
+          if (-not $checksumAsset) {
+            $guessName = "$assetName.sha256"
+            $checksumAsset = $release.assets | Where-Object { $_.name -eq $guessName } | Select-Object -First 1
+          }
+          if ($checksumAsset) {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_checksum_url=$($checksumAsset.browser_download_url)"
+            Add-Content -Path $env:GITHUB_ENV -Value "OBS_CHECKSUM_URL=$($checksumAsset.browser_download_url)"
+          }
+
+      - name: Restore OBS download cache
+        id: obs-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .obs-cache
+            # allow override via OBS_CACHE_DIR in workflows
+          key: obs-${{ steps.obs-asset.outputs.asset_id }}-${{ steps.obs-asset.outputs.asset_updated_at }}-${{ steps.obs-asset.outputs.asset_size }}
+          restore-keys: |
+            obs-${{ steps.obs-asset.outputs.asset_id }}-
+            obs-
+
+      - name: Prepare cache dir env
+        shell: pwsh
+        run: |
+          if (-not (Test-Path '.obs-cache')) { New-Item -ItemType Directory -Force -Path '.obs-cache' | Out-Null }
+          Write-Output "OBS_CACHE_DIR=.obs-cache" >> $GITHUB_ENV
+
+      - name: Set package versions from release tag
+        shell: pwsh
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          Write-Output "Setting versions to $env:TAG"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version=process.env.TAG;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('package.json version set to',process.env.TAG);"
+          node -e "const fs=require('fs');const path='src-tauri/Cargo.toml';let s=fs.readFileSync(path,'utf8');let i=s.indexOf('[package]'); if(i===-1){console.error('no [package] section'); process.exit(0);} let rest=s.slice(i); let newrest=rest.replace(/version\s*=\s*\".*\"/,'version = \"'+process.env.TAG+'\"'); s=s.slice(0,i)+newrest; fs.writeFileSync(path,s); console.log('Cargo.toml version set to',process.env.TAG);"
+          Write-Output "Updated files preview:"; Get-Content package.json | Select-Object -First 20; Write-Output "---"; Get-Content src-tauri/Cargo.toml | Select-Object -First 20
+
+      - name: Download OBS runtime (libobs-builds)
+        shell: pwsh
+        run: |
+          Write-Output "Downloading OBS build into src-tauri/resources/obs (force overwrite)"
+          .\tools\download_obs.ps1 -Force
+
+      - name: Install dependencies (yarn)
+        shell: pwsh
+        run: |
+          yarn install --frozen-lockfile
+
+      - name: Build frontend (vite)
+        shell: pwsh
+        run: |
+          yarn build
+
+      - name: Build Tauri (Windows)
+        shell: pwsh
+        run: |
+          yarn tauri build
+
+      - name: Collect bundles
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-artifacts
+          Copy-Item -Path src-tauri/target/release/bundle/* -Destination release-artifacts -Recurse -Force
+          Get-ChildItem -Path release-artifacts -Recurse
+
+      - name: Upload release artifacts to the published release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPLOAD_URL: ${{ github.event.release.upload_url }}
+        run: |
+          # Trim the templated portion of the upload_url ("{?name,label}")
+          $uploadUrlBase = $env:UPLOAD_URL -replace '\{\?.*\}$',''
+          Write-Output "Uploading assets to $uploadUrlBase"
+          $files = Get-ChildItem -Path release-artifacts -Recurse -File
+          if (-not $files) { Write-Output "No artifacts found to upload"; exit 0 }
+          foreach ($f in $files) {
+            $name = $f.Name
+            $uri = "$uploadUrlBase?name=$name"
+            Write-Output "Uploading $($f.FullName) as $name"
+            try {
+              $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
+              Invoke-RestMethod -Uri $uri -Method Post -Headers @{ Authorization = "token $env:GITHUB_TOKEN" } -Body $bytes -ContentType 'application/octet-stream'
+            } catch {
+              Write-Error "Failed to upload $name: $_"
+              exit 2
+            }
+          }
