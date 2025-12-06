@@ -1,14 +1,16 @@
 # PowerShell script to build the bootstrapper and copy it to src-tauri/binaries with target triple in the name
 
+# Define paths
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Resolve-Path "$root\.."
+$manifestPath = "$projectRoot\bootstrapper\Cargo.toml"
+
 # Build the bootstrapper
-cargo build --release --manifest-path ..\bootstrapper\Cargo.toml
+cargo build --release --manifest-path $manifestPath
 
 # Get the target triple from rustc
 $triple = (rustc -vV | Select-String 'host:').ToString().Split(':')[1].Trim()
 
-# Define paths
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = Resolve-Path "$root\.."
 $bootstrapperExe = "$projectRoot\bootstrapper\target\release\bootstrapper.exe"
 $destDir = "$projectRoot\src-tauri\binaries"
 $destExe = "$destDir\bootstrapper-$triple.exe"
