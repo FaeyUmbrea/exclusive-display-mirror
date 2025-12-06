@@ -66,26 +66,16 @@ jobs:
           Copy-Item -Path src-tauri/target/release/bundle/* -Destination release-artifacts -Recurse -Force
           Get-ChildItem -Path release-artifacts -Recurse
 
-      - name: Upload release artifacts to the published release
-        shell: pwsh
+      - name: Upload release artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPLOAD_URL: ${{ github.event.release.upload_url }}
+          TAG: ${{ github.event.release.tag_name }}
+        shell: pwsh
         run: |
-          # Trim the templated portion of the upload_url ("{?name,label}")
-          $uploadUrlBase = $env:UPLOAD_URL -replace '\{\?.*\}$',''
-          Write-Output "Uploading assets to $uploadUrlBase"
-          $files = Get-ChildItem -Path release-artifacts -Recurse -File
-          if (-not $files) { Write-Output "No artifacts found to upload"; exit 0 }
-          foreach ($f in $files) {
-            $name = $f.Name
-            $uri = "$uploadUrlBase?name=$name"
-            Write-Output "Uploading $($f.FullName) as $name"
-            try {
-              $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
-              Invoke-RestMethod -Uri $uri -Method Post -Headers @{ Authorization = "token $env:GITHUB_TOKEN" } -Body $bytes -ContentType 'application/octet-stream'
-            } catch {
-              Write-Error "Failed to upload $name: $_"
-              exit 2
-            }
+          $files = Get-ChildItem -Path release-artifacts -Recurse -File | Select-Object -ExpandProperty FullName
+          if ($files) {
+            Write-Output "Uploading files: $files"
+            gh release upload $env:TAG $files --clobber
+          } else {
+            Write-Warning "No artifacts found to upload."
           }
