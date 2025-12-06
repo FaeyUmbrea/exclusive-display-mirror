@@ -53,3 +53,5 @@ src-tauri/resources/obs/
 
 # Bootstrapper
 src-tauri/binaries
+.gemini/
+gha-creds-*.json
