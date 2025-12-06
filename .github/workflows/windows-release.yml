@@ -35,12 +35,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Setup Rust (MSVC)
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: stable-x86_64-pc-windows-msvc
           components: clippy,rustfmt
-          override: true
 
       - name: Install WiX Toolset (for MSI bundling)
         shell: pwsh
@@ -114,7 +112,7 @@ jobs:
         run: |
           Write-Output "Setting versions to $env:TAG"
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version=process.env.TAG;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('package.json version set to',process.env.TAG);"
-          node -e "const fs=require('fs');const path='src-tauri/Cargo.toml';let s=fs.readFileSync(path,'utf8');let i=s.indexOf('[package]'); if(i===-1){console.error('no [package] section'); process.exit(0);} let rest=s.slice(i); let newrest=rest.replace(/version\s*=\s*\".*\"/,'version = \"'+process.env.TAG+'\"'); s=s.slice(0,i)+newrest; fs.writeFileSync(path,s); console.log('Cargo.toml version set to',process.env.TAG);"
+          node -e "const fs=require('fs');const path='src-tauri/Cargo.toml';let s=fs.readFileSync(path,'utf8');let i=s.indexOf('[package]'); if(i===-1){console.error('no [package] section'); process.exit(0);} let rest=s.slice(i); let newrest=rest.replace(/version\s*=\s*\x22.*\x22/,'version = \x22'+process.env.TAG+'\x22'); s=s.slice(0,i)+newrest; fs.writeFileSync(path,s); console.log('Cargo.toml version set to',process.env.TAG);"
           Write-Output "Updated files preview:"; Get-Content package.json | Select-Object -First 20; Write-Output "---"; Get-Content src-tauri/Cargo.toml | Select-Object -First 20
 
       - name: Download OBS runtime (libobs-builds)
