@@ -292,7 +292,7 @@
 <div class="app-container">
   <div class="toast-outer" aria-live="polite">
     {#each toasts as t (t.id)}
-      <Toast id={t.id} message={t.message} kind={t.kind} />
+      <Toast message={t.message} kind={t.kind} />
     {/each}
   </div>
   {#if currentStep === "output-selection"}

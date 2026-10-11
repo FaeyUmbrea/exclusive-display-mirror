@@ -1,5 +1,4 @@
 <script lang="ts">
-  export let id: string;
   export let message: string;
   export let kind: 'info' | 'success' | 'warn' | 'error' = 'info';
 </script>
